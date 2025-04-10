@@ -1,0 +1,13 @@
+\contentsline {section}{\numberline {1}Symulacyjna analiza własności rozkładów asymptotycznych}{1}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Estymator wartości oczekiwanej $\mu $}{1}{subsection.1.1}%
+\contentsline {subsubsection}{\numberline {1.1.1}Rozkład normalny}{2}{subsubsection.1.1.1}%
+\contentsline {subsubsection}{\numberline {1.1.2}Rozkład wykładniczy $Exp(1)$}{7}{subsubsection.1.1.2}%
+\contentsline {subsubsection}{\numberline {1.1.3}Rozkład jednostajny $Unif[0,1]$}{12}{subsubsection.1.1.3}%
+\contentsline {subsection}{\numberline {1.2}Estymator funkcji autokowariancji $\gamma $}{16}{subsection.1.2}%
+\contentsline {subsubsection}{\numberline {1.2.1}Rozkład normalny}{17}{subsubsection.1.2.1}%
+\contentsline {subsubsection}{\numberline {1.2.2}Rozkład wykładniczy $Exp(1)$}{19}{subsubsection.1.2.2}%
+\contentsline {subsubsection}{\numberline {1.2.3}Rozkład jednostajny $Unif[0,1]$}{20}{subsubsection.1.2.3}%
+\contentsline {subsection}{\numberline {1.3}Weryfikacja hipotez statystycznych o rozkładzie asymptotycznym estymatorów}{21}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Testowanie białoszumowości}{23}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Test graficzny}{23}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Testy formalne}{25}{subsection.2.2}%

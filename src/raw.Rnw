@@ -1,0 +1,1056 @@
+\documentclass[10pt, a4paper]{article}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage[OT4]{polski}
+\usepackage[utf8]{inputenc}
+\usepackage[top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage[colorlinks=true, linkcolor=blue]{hyperref}
+\newtheorem{wn}{Wniosek}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+<<ustawienia_globalne, echo=FALSE, warning=FALSE, message=FALSE>>=
+library(knitr)
+library(xtable) #pakiet do tworzenia tabel w formacie LaTeX'a
+library(ggplot2)
+library(gridExtra)
+library(tidyr)
+library(dplyr)
+library(latex2exp)
+library(showtext)
+opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=5, fig.height=4, echo=FALSE, warning=FALSE, message=FALSE)
+@
+
+
+\begin{document}
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title{Symulacyjna analiza własności rozkładów asymptotycznych i testowanie białoszumowości}
+\author{Stanisław Olek}
+\maketitle
+\tableofcontents
+
+\section{Symulacyjna analiza własności rozkładów asymptotycznych}
+
+Przeprowadzimy symulacyjną analizę własności rozkładów asymptotycznych estymatorów dla szeregów czasowych typu biały szum. Analizowane będą następujące estymatory:
+
+\begin{enumerate}
+  \item Estymator wartości oczekiwanej $\mu$ - średnia próbkowa:
+  \begin{equation}
+  \bar{X}_n=\frac{1}{n}\sum_{t=1}^n X_t
+  \label{eq:srednia}
+  \end{equation}
+  
+  \item Estymator funkcji autokowariancji $\gamma(h)$:
+  \begin{equation}
+  \hat{\gamma}(h)=\frac{1}{n}\sum_{t=1}^{n-h}(X_{t+h}-\bar{X}_n)(X_t-\bar{X}_n), \quad \text{dla } h=0,1,\ldots,n-1
+  \label{eq:autokowariancja}
+  \end{equation}
+  
+\end{enumerate}
+
+
+\subsection{Estymator wartości oczekiwanej $\mu$}
+Najpierw zbadamy własności rozkładu estymatora wartości oczekiwanej $\mu$ zdefiniowanego w równaniu \eqref{eq:srednia}, czyli średniej próbkowej, dla różnych rozkładów i różnych długości szeregów $n$. Analiza zostanie przeprowadzona dla trzech rozkładów: normalnego, wykładniczego oraz jednostajnego.
+
+\newpage
+\subsubsection{Rozkład normalny}
+<<parametry-symulacji-norm>>=
+showtext_auto() 
+n_wartosci <- c(30, 100, 500)
+liczba_realizacji <- 100
+
+wyniki_norm <- list()
+
+for (i in 1:length(n_wartosci)) {
+  n <- n_wartosci[i]
+  realizacje <- matrix(rnorm(n*liczba_realizacji), n, liczba_realizacji)
+  srednie <- apply(realizacje, MARGIN=2, FUN=mean)
+  wyniki_norm[[i]] <- list(n = n, srednie = srednie, dane = realizacje)
+}
+@
+
+<<analiza-sredniej-norm-hist, fig.height=8, fig.width=5, fig.cap="Histogramy dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu normalnego">>=
+par(mfrow=c(3,1))
+  
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_norm[[i]]$n
+  srednie <- wyniki_norm[[i]]$srednie
+  sd_teoret <- 1/sqrt(n)
+  
+  x_range <- c(-4*sd_teoret, 4*sd_teoret)
+  hist_obj <- hist(srednie, plot=FALSE)
+  max_hist <- max(hist_obj$density)
+  max_teoret <- dnorm(0, 0, sd_teoret)
+  max_h <- max(max_hist, max_teoret) * 1.1
+  
+  hist(srednie, probability=TRUE, col="purple", main=paste("Histogram dla szeregu rozmiaru n =", n), xlab="średnia", xlim=x_range, ylim=c(0, max_h))
+  curve(dnorm(x, mean=0, sd=sd_teoret), col="red", add=T, lwd=2,from=x_range[1], to=x_range[2])
+        
+  legend("topright", legend=c("gęstość teoretyczna"), col=c("red"), lty=1)
+}
+@
+
+
+<<analiza-sredniej-norm-dens, fig.height=9, fig.width=5, fig.cap="Wykresy gęstości dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu normalnego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_norm[[i]]$n
+  srednie <- wyniki_norm[[i]]$srednie
+  sd_teoret <- 1/sqrt(n)
+  
+  x_range <- c(-4*sd_teoret, 4*sd_teoret)
+  max_h <- dnorm(0, 0, sd_teoret) * 1.1
+  
+  dens <- density(srednie)
+  plot(dens, main=paste("Wykres gęstości dla szeregu rozmiaru n =", n), col="purple", xlim=x_range, ylim=c(0, max_h))
+  curve(dnorm(x, mean=0, sd=sd_teoret), col="red", add=T, lwd=2, from=x_range[1], to=x_range[2])
+        
+  legend("topright", legend=c("gęstość teoretyczna", "gęstość empiryczna"), col=c("red", "purple"), lty=1)
+}
+@
+
+
+
+<<analiza-sredniej-norm-dystr-emp, fig.height=9, fig.width=5, fig.cap="Dystrybuanty empiryczne dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu normalnego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_norm[[i]]$n
+  srednie <- wyniki_norm[[i]]$srednie
+  sd_teoret <- 1/sqrt(n)
+  
+  x_range <- c(-4*sd_teoret, 4*sd_teoret)
+  ecdf_data <- ecdf(srednie)
+  
+  plot(ecdf_data, main=paste("Dystrybuanta empiryczna dla szeregu rozmiaru n =", n), col="purple", lwd=2, xlim=x_range, ylim=c(0, 1.05))
+  
+  curve(pnorm(x, mean=0, sd=sd_teoret), col="red", add=TRUE, lwd=2, from=x_range[1], to=x_range[2])
+  
+  legend("bottomright", legend=c("dystrybuanta teoretyczna", "dystrybuanta empiryczna"), col=c("red", "purple"), lty=c(1,1), lwd=c(2,2))
+}
+@
+
+
+<<analiza-srednie-wykresy-kwant, fig.height=9, fig.width=5, fig.cap="Wykresy kwantylowe dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu normalnego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_norm[[i]]$n
+  srednie <- wyniki_norm[[i]]$srednie
+  qqnorm(srednie, main=paste("Wykres kwantylowy dla rozkładu normalnego, n =", n), col="purple")
+  qqline(srednie, col="red")
+}
+@
+
+
+Analiza estymatora średniej próbkowej dla danych z rozkładu normalnego wykazała następujące własności:
+
+\begin{itemize}
+    \item Dla wszystkich analizowanych długości szeregów ($n = 30, 100, 500$) rozkład empiryczny średniej próbkowej wykazał idealne dopasowanie do teoretycznego rozkładu normalnego, co potwierdzają:
+        \begin{itemize}
+            \item Symetryczny kształt histogramów ze skupieniem wokół wartości 0 jak widać na [\ref{fig:analiza-sredniej-norm-hist}]
+            \item Nakładanie się empirycznych i teoretycznych krzywych gęstości jak widać na [\ref{fig:analiza-sredniej-norm-dens}]
+            \item Niemal całkowite pokrywanie się dystrybuant empirycznych z teoretyczną dystrybuantą normalną jak widać na [\ref{fig:analiza-sredniej-norm-dystr-emp}]
+            \item Punkty na wykresach kwantylowych układają się wzdłuż linii teoretycznej jak widać na [\ref{fig:analiza-srednie-wykresy-kwant}]
+        \end{itemize}
+      
+      \item Nawet dla małych prób ($n = 30$) brak obserwowalnych odchyleń od normalności
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\subsubsection{Rozkład wykładniczy $Exp(1)$}
+<<parametry-symulacji-exp, echo=FALSE>>=
+wyniki_exp <- list()
+
+for (i in 1:length(n_wartosci)) {
+  n <- n_wartosci[i]
+  realizacje <- matrix(rexp(n*liczba_realizacji, rate=1), n, liczba_realizacji)
+  srednie <- apply(realizacje, MARGIN=2, FUN=mean)
+  wyniki_exp[[i]] <- list(n = n, srednie = srednie, dane = realizacje)
+}
+@
+
+<<analiza-sredniej-exp-hist, fig.height=8, fig.width=5, fig.cap="Histogramy dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu wykładniczego">>=
+par(mfrow=c(3,1))
+  
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_exp[[i]]$n
+  srednie <- wyniki_exp[[i]]$srednie
+  sd_teoret <- 1/sqrt(n)
+  
+  x_min <- max(0, 1-4*sd_teoret)
+  x_max <- 1+4*sd_teoret
+  x_range <- c(x_min, x_max)
+  hist_obj <- hist(srednie, plot=FALSE)
+  max_hist <- max(hist_obj$density)
+  max_teoret <- dnorm(1, 1, sd_teoret)
+  max_h <- max(max_hist, max_teoret) * 1.1
+  
+  hist(srednie, probability=TRUE, col="orange", main=paste("Histogram dla rozkładu wykładniczego, n =", n), xlab="średnia", xlim=x_range, ylim=c(0, max_h))
+  curve(dnorm(x, mean=1, sd=sd_teoret), col="red", add=T, lwd=2, from=x_range[1], to=x_range[2])
+        
+  legend("topright", legend=c("gęstość teoretyczna"), col=c("red"), lty=1)
+}
+@
+
+<<analiza-sredniej-exp-dens, fig.height=9, fig.width=5, fig.cap="Wykresy gęstości dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu wykładniczego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_exp[[i]]$n
+  srednie <- wyniki_exp[[i]]$srednie
+  sd_teoret <- 1/sqrt(n)
+  
+  x_min <- max(0, 1-4*sd_teoret)
+  x_max <- 1+4*sd_teoret
+  x_range <- c(x_min, x_max)
+  
+  max_h <- dnorm(1, 1, sd_teoret) * 1.1
+  
+  dens <- density(srednie)
+  plot(dens, main=paste("Wykres gęstości dla rozkładu wykładniczego, n =", n), col="orange", xlim=x_range, ylim=c(0, max_h))
+  curve(dnorm(x, mean=1, sd=sd_teoret), col="red", add=T, lwd=2, from=x_range[1], to=x_range[2])
+        
+  legend("topright", legend=c("gęstość teoretyczna", "gęstość empiryczna"), col=c("red", "orange"), lty=1)
+}
+@
+
+<<analiza-sredniej-exp-dystr-emp, fig.height=9, fig.width=5, fig.cap="Dystrybuanty empiryczne dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu wykładniczego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_exp[[i]]$n
+  srednie <- wyniki_exp[[i]]$srednie
+  sd_teoret <- 1/sqrt(n)
+  
+  x_min <- max(0, 1-4*sd_teoret)
+  x_max <- 1+4*sd_teoret
+  x_range <- c(x_min, x_max)
+  
+  ecdf_data <- ecdf(srednie)
+  plot(ecdf_data, main=paste("Dystrybuanta empiryczna dla rozkładu wykładniczego, n =", n), col="orange", lwd=2, xlim=x_range, ylim=c(0, 1.05))
+  curve(pnorm(x, mean=1, sd=sd_teoret), col="red", add=TRUE, lwd=2, from=x_range[1], to=x_range[2])
+  
+  legend("bottomright", legend=c("dystrybuanta teoretyczna", "dystrybuanta empiryczna"), col=c("red", "orange"), lty=c(1,1), lwd=c(2,2))
+}
+@
+
+
+<<analiza-srednie-exp-wykresy-kwant, fig.height=9, fig.width=5, fig.cap="Wykresy kwantylowe dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu wykładniczego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_exp[[i]]$n
+  srednie <- wyniki_exp[[i]]$srednie
+  stand_srednie <- (srednie - 1)/(1/sqrt(n))
+  qqnorm(stand_srednie, 
+         main=paste("Wykres kwantylowy dla rozkładu wykładniczego, n =", n), col="orange")
+  qqline(stand_srednie, col="red")
+}
+@
+
+Analiza wyników dla rozkładu wykładniczego pokazuje właściwości asymptotyczne estymatora średniej. Obserwujemy, że:
+
+\begin{itemize}
+  \item Dla najmniejszej wielkości próby $n=30$ rozkład empiryczny estymatora wykazuje lekką asymetrię, co widać zarówno na histogramach [\ref{fig:analiza-sredniej-exp-hist}] jak i wykresach gęstości [\ref{fig:analiza-sredniej-exp-dens}]
+  \item Wraz ze wzrostem rozmiaru próbki ($n=100$ i $n=500$) asymetria zanika, a rozkład empiryczny coraz lepiej przybliża rozkład normalny
+  \item Dystrybuanty empiryczne [\ref{fig:analiza-sredniej-exp-dystr-emp}] pokazują wyraźne zbliżanie się do dystrybuanty rozkładu normalnego $N(1, 1/\sqrt{n})$ gdy $n$ rośnie. Dla $n=500$ dopasowanie jest niemal idealne
+  \item Wykresy kwantylowe [\ref{fig:analiza-srednie-exp-wykresy-kwant}] potwierdzają normalność rozkładu dla większych $n$, choć nawet przy $n=500$ można zauważyć niewielkie odchylenia w ogonach rozkładu
+\end{itemize}
+
+Obserwacje te potwierdzają teoretyczne przewidywania, według którego średnia próbkowa zmiennych niezależnych o rozkładzie wykładniczym będzie asymptotycznie zbiegać do rozkładu normalnego $N(1, 1/\sqrt{n})$, gdzie $1$ jest wartością oczekiwaną rozkładu wykładniczego $Exp(1)$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage 
+\subsubsection{Rozkład jednostajny $Unif[0,1]$}
+<<parametry-symulacji-unif, echo=FALSE>>=
+wyniki_unif <- list()
+
+for (i in 1:length(n_wartosci)) {
+  n <- n_wartosci[i]
+  realizacje <- matrix(runif(n*liczba_realizacji), n, liczba_realizacji)
+  srednie <- apply(realizacje, MARGIN=2, FUN=mean)
+  wyniki_unif[[i]] <- list(n = n, srednie = srednie, dane = realizacje)
+}
+@
+
+<<analiza-sredniej-unif-hist, fig.height=8, fig.width=5, fig.cap="Histogramy dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu jednostajnego">>=
+par(mfrow=c(3,1))
+  
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_unif[[i]]$n
+  srednie <- wyniki_unif[[i]]$srednie
+  sd_teoret <- sqrt(1/(12*n))
+  
+  x_range <- c(0.5-4*sd_teoret, 0.5+4*sd_teoret)
+  hist_obj <- hist(srednie, plot=FALSE)
+  max_hist <- max(hist_obj$density)
+  max_teoret <- dnorm(0.5, 0.5, sd_teoret)
+  max_h <- max(max_hist, max_teoret) * 1.1
+  
+  hist(srednie, probability=TRUE, col="lightgreen", main=paste("Histogram dla rozkładu jednostajnego, n =", n), xlab="średnia", xlim=x_range, ylim=c(0, max_h))
+  curve(dnorm(x, mean=0.5, sd=sd_teoret), col="red", add=T, lwd=2, from=x_range[1], to=x_range[2])
+        
+  legend("topright", legend=c("gęstość teoretyczna"), col=c("red"), lty=1)
+}
+@
+
+<<analiza-sredniej-unif-dens, fig.height=9, fig.width=5, fig.cap="Wykresy gęstości dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu jednostajnego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_unif[[i]]$n
+  srednie <- wyniki_unif[[i]]$srednie
+  sd_teoret <- sqrt(1/(12*n))
+  
+  x_range <- c(0.5-4*sd_teoret, 0.5+4*sd_teoret)
+  max_h <- dnorm(0.5, 0.5, sd_teoret) * 1.1
+  
+  dens <- density(srednie)
+  plot(dens, main=paste("Wykres gęstości dla rozkładu jednostajnego, n =", n), col="lightgreen", xlim=x_range, ylim=c(0, max_h))
+       
+  curve(dnorm(x, mean=0.5, sd=sd_teoret), col="red", add=T, lwd=2, from=x_range[1], to=x_range[2])
+        
+  legend("topright", legend=c("gęstość teoretyczna", "gęstość empiryczna"), col=c("red", "lightgreen"), lty=1)
+}
+@
+
+<<analiza-sredniej-unif-dystr-emp, fig.height=9, fig.width=5, fig.cap="Dystrybuanty empiryczne dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu jednostajnego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_unif[[i]]$n
+  srednie <- wyniki_unif[[i]]$srednie
+  sd_teoret <- sqrt(1/(12*n))
+  
+  x_range <- c(0.5-4*sd_teoret, 0.5+4*sd_teoret)
+  ecdf_data <- ecdf(srednie)
+  
+  plot(ecdf_data, main=paste("Dystrybuanta empiryczna dla rozkładu jednostajnego, n =", n), col="lightgreen", lwd=2, xlim=x_range, ylim=c(0, 1.05))
+  
+  curve(pnorm(x, mean=0.5, sd=sd_teoret), col="red", add=TRUE, lwd=2, from=x_range[1], to=x_range[2])
+  
+  legend("bottomright", legend=c("dystrybuanta teoretyczna", "dystrybuanta empiryczna"), col=c("red", "lightgreen"), lty=c(1,1), lwd=c(2,2))
+}
+@
+
+<<analiza-srednie-unif-wykresy-kwant, fig.height=9, fig.width=5, fig.cap="Wykresy kwantylowe dla estymatora średniej dla różnych długości szeregów $n$ z rozkładu jednostajnego">>=
+par(mfrow=c(3,1))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_unif[[i]]$n
+  srednie <- wyniki_unif[[i]]$srednie
+  stand_srednie <- (srednie - 0.5)/sqrt(1/(12*n))
+  qqnorm(stand_srednie, main=paste("Wykres kwantylowy dla rozkładu jednostajnego, n =", n), col="lightgreen")
+  qqline(stand_srednie, col="red")
+}
+@
+
+
+Na podstawie przeprowadzonej analizy estymatora średniej dla rozkładu jednostajnego $Unif[0,1]$ można sformułować następujące wnioski:
+
+\begin{itemize}
+    \item Wyniki symulacji potwierdzają, że rozkład średniej próbkowej z rozkładu jednostajnego dąży do rozkładu normalnego wraz ze wzrostem liczby obserwacji, jak widać na [\ref{fig:analiza-sredniej-unif-hist}]
+    \item Wraz ze wzrostem liczności próby $n$ obserwujemy:
+    \begin{itemize}
+        \item Bardziej symetryczny kształt histogramu i rozkładu gęstości wokół wartości oczekiwanej $1/2$, jak widać na [\ref{fig:analiza-sredniej-unif-hist}]
+        \item Coraz lepsze dopasowanie empirycznego rozkładu do teoretycznego rozkładu normalnego, jak widać na wykresach gęstości [\ref{fig:analiza-sredniej-unif-dens}]    
+        \item Coraz lepsze dopasowanie do teoretycznej dystrybuanty rozkładu normalnego, jak widać na [\ref{fig:analiza-sredniej-unif-dystr-emp}]
+        \item Punkty na wykresie kwantylowym układają się wzdłuż linii teoretycznej, co wskazuje na dobre dopasowanie do rozkładu normalnego, jak widać na [\ref{fig:analiza-srednie-unif-wykresy-kwant}]
+        \end{itemize}
+    \item Nawet dla stosunkowo małych liczności próby (np. $n = 30$), średnia próbkowa wykazuje już znaczną zbieżność do rozkładu normalnego
+\end{itemize}
+
+
+
+
+
+\subsection{Estymator funkcji autokowariancji $\gamma$}
+Przeprowadzimy analizę własności estymatora autokowariancji zdefiniowanego w równaniu \eqref{eq:autokowariancja} dla różnych rozkładów białego szumu i długości szeregów.
+
+\newpage
+\subsubsection{Rozkład normalny}
+<<analiza-autokowariancji-norm>>=
+oblicz_autokowariancje <- function(x, h) {
+  n <- length(x)
+  srednia <- mean(x)
+  sum((x[(h + 1):n] - srednia) * (x[1:(n - h)] - srednia)) / n
+}
+
+wybierz_opoznienia <- function(n) {
+  unique(floor(c(n*0.25, n*0.5, n*0.9)))
+}
+
+wyniki_gamma_norm <- list()
+
+for(i in 1:length(n_wartosci)) {
+  n <- wyniki_norm[[i]]$n
+  dane <- wyniki_norm[[i]]$dane
+  opoznienia <- wybierz_opoznienia(n)
+  
+  macierz_gamma <- matrix(NA, nrow = length(opoznienia), ncol = liczba_realizacji)
+  
+  for(h_i in 1:length(opoznienia)) {
+    h <- opoznienia[h_i]
+    macierz_gamma[h_i,] <- apply(dane, 2, function(x) oblicz_autokowariancje(x, h))
+  }
+  
+  wyniki_gamma_norm[[i]] <- list(
+    n = n,
+    opoznienia = opoznienia,
+    gamma = macierz_gamma
+  )
+}
+@
+
+<<wykresy-gamma-norm, fig.height=9, fig.width=8, fig.cap="Histogramy dla estymatora funkcji autokowariancji dla różnych długości szeregów $n$ i różnych opóźnień $h$ z rozkładu normalnego">>=
+par(mfrow = c(3, 3), oma = c(2, 0, 0, 2))
+
+for(i in 1:length(n_wartosci)) {
+  n <- wyniki_gamma_norm[[i]]$n
+  opoznienia <- wyniki_gamma_norm[[i]]$opoznienia
+  
+  for(h_i in 1:length(opoznienia)) {
+    h <- opoznienia[h_i]
+    gamma_autkow <- wyniki_gamma_norm[[i]]$gamma[h_i,]
+    
+    hist(gamma_autkow, freq = FALSE, col = "lightblue", main = paste("n =", n, ", h=", h), xlab=TeX("$\\rho(h)$"), cex=0.7)
+    curve(dnorm(x, 0, 1/sqrt(n)), add = TRUE, col = "red", lwd = 2)
+  }
+}
+
+
+par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
+legend(x = "bottom", legend = TeX("teoretyczna gęstość $N(0, 1 / \\sqrt{n})$"), col = "red", lwd = 2, horiz = TRUE)
+@
+
+
+\newpage
+Wyniki dla róźnych $n$ i opóźnień $h$ przedstawiono na [\ref{fig:wykresy-gamma-norm}].
+Analiza estymatora funkcji autokowariancji dla danych z rozkładu normalnego wykazała następujące własności:
+
+\begin{itemize}
+\item Wpływ długości szeregu $n$:
+  \begin{itemize}
+  \item Wzrost $n$ zmniejsza wariancję estymatora
+  \item Dla $n=500$ rozkład ściśle skupiony wokół 0
+  \end{itemize}
+
+\item Zachowanie dla dużych $h$:
+  \begin{itemize}
+  \item Przy $h \approx 0.9n$ wariancja wzrasta kilkukrotnie
+  \item Pojawiają się wartości odstające i asymetria
+  \end{itemize}
+\end{itemize}
+
+
+Estymator $\hat{\gamma}(h)$ jest asymptotycznie normalny $N(0,1/n)$, ale dla $h \approx n$ traci własności asymptotyczne.
+
+
+\newpage
+\subsubsection{Rozkład wykładniczy $Exp(1)$}
+<<analiza-autokowariancji-exp>>=
+wyniki_gamma_exp <- list()
+
+for(i in 1:length(n_wartosci)) {
+  n <- wyniki_exp[[i]]$n
+  dane <- wyniki_exp[[i]]$dane
+  opoznienia <- wybierz_opoznienia(n)
+  
+  macierz_gamma <- matrix(NA, nrow = length(opoznienia), ncol = liczba_realizacji)
+  
+  for(h_i in 1:length(opoznienia)) {
+    h <- opoznienia[h_i]
+    macierz_gamma[h_i,] <- apply(dane, 2, function(x) oblicz_autokowariancje(x, h))
+  }
+  
+  wyniki_gamma_exp[[i]] <- list(
+    n = n,
+    opoznienia = opoznienia,
+    gamma = macierz_gamma
+  )
+}
+@
+
+<<wykresy-gamma-exp, fig.height=9, fig.width=8, fig.cap="Histogramy dla estymatora funkcji autokowariancji dla różnych długości szeregów $n$ i różnych opóźnień $h$ z rozkładu wykładniczego">>=
+par(mfrow = c(3, 3), oma = c(1, 0, 0, 2))
+
+for(i in 1:length(n_wartosci)) {
+  n <- wyniki_gamma_exp[[i]]$n
+  opoznienia <- wyniki_gamma_exp[[i]]$opoznienia
+  
+  for(h_i in 1:length(opoznienia)) {
+    h <- opoznienia[h_i]
+    gamma_autkow <- wyniki_gamma_exp[[i]]$gamma[h_i,]
+    
+    hist(gamma_autkow, freq = FALSE, col = "orange", main = paste("n =", n, ", h =", h), xlab=TeX("$\\rho(h)$"), cex=0.7)
+    curve(dnorm(x, 0, 1/sqrt(n)), add = TRUE, col = "red", lwd = 2)
+  }
+}
+
+par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
+legend(x="bottom", legend = TeX("teoretyczna gęstość $N(0, 1 / \\sqrt{n})$"), col = "red", lwd = 2)
+@
+
+Wyniki dla róźnych $n$ i opóźnień $h$ przedstawiono na [\ref{fig:wykresy-gamma-exp}]. Analiza estymatora funkcji autokowariancji dla danych z rozkładu wykładniczego wykazała następujące własności:
+  \begin{itemize}
+  \item Dla $n=30$ widoczna asymetria rozkładu
+  \item Dla $h \approx 0.9n$ większa skośność niż w rozkładzie normalnym
+  \item Asymptotyczna normalność osiągana dopiero dla $n \geq 100$
+\end{itemize}
+
+Estymator $\hat{\gamma}(h)$ zachowuje własności asymptotyczne nawet dla silnie skośnych danych, ale wymaga większych próbek ($n \geq 100$) dla dobrej aproksymacji.
+
+
+\subsubsection{Rozkład jednostajny $Unif[0,1]$}
+<<analiza-autokowariancji-unif>>=
+wyniki_gamma_unif <- list()
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_unif[[i]]$n
+  dane <- wyniki_unif[[i]]$dane
+  opoznienia <- wybierz_opoznienia(n)
+  
+  macierz_gamma <- matrix(NA, nrow = length(opoznienia), ncol = liczba_realizacji)
+  
+  for (h_i in 1:length(opoznienia)) {
+    h <- opoznienia[h_i]
+    macierz_gamma[h_i, ] <- apply(dane, 2, function(x) oblicz_autokowariancje(x, h))
+  }
+  
+  wyniki_gamma_unif[[i]] <- list(
+    n = n,
+    opoznienia = opoznienia,
+    gamma = macierz_gamma
+  )
+}
+@
+
+<<wykresy-gamma-unif, fig.height=9, fig.width=8, fig.cap="Histogramy dla estymatora funkcji autokowariancji dla różnych długości szeregów $n$ i różnych opóźnień $h$ z rozkładu jednostajnego">>=
+par(mfrow = c(3, 3), oma = c(1, 0, 0, 2))
+
+for (i in 1:length(n_wartosci)) {
+  n <- wyniki_gamma_unif[[i]]$n
+  opoznienia <- wyniki_gamma_unif[[i]]$opoznienia
+  gamma <- wyniki_gamma_unif[[i]]$gamma
+  num_h <- length(opoznienia)
+  rows <- ceiling(num_h / 3)  
+  
+  for (h_i in 1:num_h) {
+    h <- opoznienia[h_i]
+    hist(gamma[h_i, ], main = paste("n =", n, ", h =", h), xlab=TeX("$\\rho(h)$"), col = "skyblue", freq = FALSE)
+    curve(dnorm(x, 0, 1/(12*sqrt(n))), add = TRUE, col = "red", lwd = 2)
+  }
+}
+
+par(fig = c(0, 1, 0, 0.03), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
+legend(x = "bottom", legend = TeX("teoretyczna gęstość $N(0, 1 / 12 \\sqrt{n})$"), col = "red", lwd = 2)
+@
+
+Wyniki dla różnych \( n \) i opóźnień \( h \) przedstawiono na [\ref{fig:wykresy-gamma-unif}]. Analiza estymatora funkcji autokowariancji dla danych z rozkładu jednostajnego wykazała następujące własności:
+\begin{itemize}
+    \item Dla \( n = 30 \) widoczna jest pewna asymetria rozkładu estymatora \( \hat{\gamma}(h) \), co sugeruje, że dla małych próbek rozkład nie jest jeszcze w pełni normalny
+    \item Dla \( h \approx 0.9n \) histogramy wykazują większą zmienność i są mniej stabilne, co jest związane z mniejszą liczbą par obserwacji używanych do obliczenia estymatora
+    \item Asymptotyczna normalność estymatora \( \hat{\gamma}(h) \) dla \( h \neq 0 \) jest osiągana dla większych próbek, takich jak \( n \geq 100 \), gdzie histogramy stają się bardziej symetryczne i skoncentrowane wokół zera
+\end{itemize}
+
+Estymator \( \hat{\gamma}(h) \) zachowuje własności asymptotyczne dla danych z rozkładu jednostajnego, ale dla małych próbek (\( n < 100 \)) i dużych opóźnień (\( h \) bliskich \( n \)), jego rozkład może odbiegać od normalnego. Dla większych próbek (\( n \geq 100 \)), aproksymacja jest dobra.
+
+
+
+\subsection{Weryfikacja hipotez statystycznych o rozkładzie asymptotycznym estymatorów}
+
+Przeprowadzimy formalne testy statystyczne w celu weryfikacji hipotezy o normalności rozkładów asymptotycznych estymatorów średniej i autokowariancji. Będziemy korzystać z testu Shapiro-Wilka.
+
+Będziemy weryfikować hipotezę:
+
+$H_0$: Badany rozkład jest zgodny z rozkładem normalnym
+
+przeciwko:
+
+$H_1$: Badany rozkład nie jest zgodny z rozkładem normalnym
+
+Testy będziemy przeprowadzać na poziomie istotności $\alpha = 0.05$.
+
+<<testy, results='asis'>>=
+przeprowadz_testy_dla_estymatora_sredniej <- function(rozkład, n_wartosci, poziom_istotnosci = 0.05, ile_powtorz = 1000) {
+  wyniki <- data.frame(
+    n = numeric(),
+    procent_przyjec_H0 = numeric(),
+    rozkład = character()
+  )
+  
+  for (n in n_wartosci) {
+    wynik.sw <- numeric(ile_powtorz)
+    
+    for (i in 1:ile_powtorz) {
+      if (rozkład == "normalny") {
+        realizacje <- matrix(rnorm(n*100, mean=0, sd=1), n, 100)
+        meanH0 <- 0
+        sdH0 <- 1/sqrt(n)
+      } else if (rozkład == "wykładniczy") {
+        realizacje <- matrix(rexp(n*100, rate=1), n, 100)
+        meanH0 <- 1
+        sdH0 <- 1/sqrt(n)
+      } else if (rozkład == "jednostajny") {
+        realizacje <- matrix(runif(n*100), n, 100)
+        meanH0 <- 0.5
+        sdH0 <- sqrt(1/(12*n))
+      }
+      
+      srednie <- apply(realizacje, 2, mean)
+      
+      if (rozkład != "normalny") {
+        srednie <- (srednie - meanH0) / sdH0
+      }
+      
+      wynik.sw[i] <- shapiro.test(srednie)$p.value > poziom_istotnosci
+    }
+    
+    wyniki <- rbind(wyniki, data.frame(
+      n = n,
+      procent_przyjec_H0 = sum(wynik.sw)/ile_powtorz * 100,
+      rozkład = rozkład
+    ))
+  }
+  
+  return(wyniki)
+}
+
+przeprowadz_testy_dla_autokowariancji <- function(rozkład, n_wartosci, poziom_istotnosci = 0.05, ile_powtorz = 1000) {
+  wyniki <- data.frame(
+    n = numeric(),
+    h = numeric(),
+    procent_przyjec_H0 = numeric(),
+    rozkład = character()
+  )
+  
+  for (n in n_wartosci) {
+    opoznienia <- unique(floor(c(1, n*0.25, n*0.5)))
+    
+    for (h in opoznienia) {
+      wynik.sw <- numeric(ile_powtorz)
+      
+      for (i in 1:ile_powtorz) {
+        if (rozkład == "normalny") {
+          realizacje <- matrix(rnorm(n*100, mean=0, sd=1), n, 100)
+          meanH0 <- 0
+          sdH0 <- 1/sqrt(n)
+        } else if (rozkład == "wykładniczy") {
+          realizacje <- matrix(rexp(n*100, rate=1), n, 100)
+          meanH0 <- 0
+          sdH0 <- 1/sqrt(n)
+        } else if (rozkład == "jednostajny") {
+          realizacje <- matrix(runif(n*100), n, 100)
+          meanH0 <- 0
+          sdH0 <- 1/(12*sqrt(n))
+        }
+        
+        autokowariancje <- apply(realizacje, 2, function(x) {
+          oblicz_autokowariancje(x, h)
+        })
+        
+        if (rozkład != "normalny") {
+          autokowariancje <- (autokowariancje - meanH0) / sdH0
+        }
+        
+        wynik.sw[i] <- shapiro.test(autokowariancje)$p.value > poziom_istotnosci
+      }
+      
+      wyniki <- rbind(wyniki, data.frame(
+        n = n,
+        h = h,
+        procent_przyjec_H0 = sum(wynik.sw)/ile_powtorz * 100,
+        rozkład = rozkład
+      ))
+    }
+  }
+  
+  return(wyniki)
+}
+
+ile_powtorz <- 1000
+n_wartosci <- c(30, 100, 500)
+
+wyniki_średnia_norm <- przeprowadz_testy_dla_estymatora_sredniej("normalny", n_wartosci, ile_powtorz = ile_powtorz)
+wyniki_średnia_exp <- przeprowadz_testy_dla_estymatora_sredniej("wykładniczy", n_wartosci, ile_powtorz = ile_powtorz)
+wyniki_średnia_unif <- przeprowadz_testy_dla_estymatora_sredniej("jednostajny", n_wartosci, ile_powtorz = ile_powtorz)
+
+wyniki_średnia <- rbind(
+  wyniki_średnia_norm,
+  wyniki_średnia_exp,
+  wyniki_średnia_unif
+)
+
+wyniki_autokow_norm <- przeprowadz_testy_dla_autokowariancji("normalny", n_wartosci, ile_powtorz = ile_powtorz)
+wyniki_autokow_exp <- przeprowadz_testy_dla_autokowariancji("wykładniczy", n_wartosci, ile_powtorz = ile_powtorz)
+wyniki_autokow_unif <- przeprowadz_testy_dla_autokowariancji("jednostajny", n_wartosci, ile_powtorz = ile_powtorz)
+
+wyniki_autokow <- rbind(
+  wyniki_autokow_norm,
+  wyniki_autokow_exp,
+  wyniki_autokow_unif
+)
+
+print(xtable(wyniki_średnia, caption = "Odsetek przyjęć hipotezy o normalności rozkładu estymatora średniej", label = "tab:srednia_normalnosc"), caption.placement = "top")
+print(xtable(wyniki_autokow, caption = "Odsetek przyjęć hipotezy o normalności rozkładu estymatora autokowariancji", label = "tab:autokow_normalnosc"), caption.placement = "top")
+@
+
+\newpage
+Na podstawie wyników przeprowadzonych testów statystycznych (tabela \ref{tab:srednia_normalnosc} i tabela \ref{tab:autokow_normalnosc}) można sformułować następujące wnioski:
+
+\begin{enumerate}
+  \item Dla estymatora średniej (tabela \ref{tab:srednia_normalnosc}):
+  \begin{itemize}
+    \item W przypadku danych z rozkładu normalnego odsetek przyjęć hipotezy o normalności jest bliski 95\% dla wszystkich badanych długości szeregu, co potwierdza teoretyczne własności rozkładu tego estymatora
+    \item Dla rozkładu wykładniczego, zgodność z rozkładem normalnym znacząco poprawia się wraz ze wzrostem $n$, co jest zgodne z centralnym twierdzeniem granicznym
+    \item Dla rozkładu jednostajnego, nawet przy małych wartościach $n$ rozkład średniej jest bliski normalnemu
+  \end{itemize}
+  
+  \item Dla estymatora autokowariancji (tabela \ref{tab:autokow_normalnosc}):
+  \begin{itemize}
+    \item Przy małych opóźnieniach ($h$) rozkład estymatora zbliża się do normalnego wraz ze wzrostem $n$ dla wszystkich badanych rozkładów
+    \item Przy większych opóźnieniach (np. $h = 0.5n$) zgodność z rozkładem normalnym jest gorsza, co potwierdza obserwacje z poprzednich analiz
+  \end{itemize}
+  
+\end{enumerate}
+
+Wyniki te, potwierdzają teoretyczne przewidywania dotyczące asymptotycznych rozkładów badanych estymatorów i wskazują, że dla odpowiednio dużych prób ($n \geq 100$) rozkład normalny stanowi dobre przybliżenie, niezależnie od rozkładu wejściowego.
+
+\newpage
+\section{Testowanie białoszumowości}
+W tym rozdziale zajmiemy się testowaniem białoszumowości dla różnych szeregów czasowych za pomocą funkcji autokorelacji. Wypróbujemy 2 podejścia - test graficzny oraz testy formalne. Wpierw zaimplementujemy test graficzny. Jako poziom istotności w naszej analizie przyjmiemy $\alpha=0.05$.
+\subsection{Test graficzny} \label{sekcja1}
+Do zaimplementowania graficznego testu wykorzystamy własną funkcję. Aby ten test zidentyfikował nam szereg jako biały szum, musi spełnić 2 kryteria:
+\begin{enumerate}
+\item Co najmniej 95\% autokorelacji próbkowych musi znajdować się w przedziale $[\frac{-1.96}{\sqrt{n}}; \frac{1.96}{\sqrt{n}}]$, gdzie ograniczenie górne podanych wartości jest kwantylem rzędu 0.975 ($1-\frac{\alpha}{2}$) rozkładu N(0,1) podzieloną przez pierwiastek z liczności próby, czyli $n$.
+\item Nie ma żadnych autokorelacji próbkowych wychodzących istotnie poza przedział ufności. U nas "istotnie" będzie znaczyło, że autokorelacje próbkowe nie są większe niż $1.2\cdot\frac{1.96}{\sqrt{n}}$ i nie są mniejsze niż $1.2\cdot\frac{-1.96}{\sqrt{n}}$.
+\end{enumerate}
+<<testowanie_białoszumowsci1, echo=FALSE,message=FALSE,warning=FALSE>>=
+library(forecast)
+set.seed(5)
+graph_test <- function(x, alpha = 0.05){
+  autocor <- Acf(x, lag.max = length(x) - 1, plot = F)$acf[-1,1,1]
+
+  odst <- (abs(autocor) > (qnorm(1 - alpha / 2) / sqrt(length(x))))
+  procent.odst <- mean(odst)
+  print(paste('Procent autokorelacji, które nie odstają poza przedział ufności:', round(100 * procent.odst, 2), '%'))
+  
+  ist.odst <- any(abs(autocor) > (1.2 * qnorm(1 - alpha / 2) / sqrt(length(x))))
+  ifelse(ist.odst, 
+         print('Czy są istotnie odstające autokorelacje: Tak'),
+         print('Czy są istotnie odstające autokorelacje: Nie'))
+  
+  ifelse(procent.odst > alpha | ist.odst,
+         print('Wg testu graficznego to nie jest biały szum'),
+         print('Wg testu graficznego to jest biały szum'))
+  Acf(x, lag.max = length(x) - 1, main = 'Wykres autokorelacji')
+  #return(ifelse(procent.odst > alpha | ist.odst, 0 , 1))
+}
+@
+Mając zaimplementowany test graficzny możemy sprawdzić, jak wypada test graficzny dla szumu IID z rozkładu $N(0,1)$. Jako rozmiar próby przyjmiemy $n=100$ dla większej dokładności.
+\begin{figure}[H]
+<<testowanie_białoszumowsci2>>=
+x<-rnorm(100)
+graph_test(x)
+@
+\caption{Wykres autokorelacji dla szumu IID ze standardowego rozkładu normalnego}
+\label{graph1}
+\end{figure}
+<<echo=FALSE>>=
+graph_test2 <- function(x, alpha = 0.05){
+  autocor <- Acf(x, lag.max = length(x) - 1, plot = F)$acf[-1,1,1]
+
+  odst <- (abs(autocor) > (qnorm(1 - alpha / 2) / sqrt(length(x))))
+  procent.odst <- mean(odst)
+  #print(paste('Procent autokorelacji, które nie odstają poza przedział ufności:', round(100 * procent.odst, 2), '%'))
+  
+  ist.odst <- any(abs(autocor) > (1.2 * qnorm(1 - alpha / 2) / sqrt(length(x))))
+  #ifelse(ist.odst, 
+  #       print('Czy są istotnie odstające autokorelacje: Tak'),
+  #       print('Czy są istotnie odstające autokorelacje: Nie'))
+  
+  #ifelse(procent.odst > alpha | ist.odst,
+  #       print('Wg testu graficznego to nie jest biały szum'),
+  #       print('Wg testu graficznego to jest biały szum'))
+  #Acf(x, lag.max = length(x) - 1, main = 'Wykres autokorelacji')
+  return(ifelse(procent.odst > alpha | ist.odst, 0 , 1))
+}
+@
+Test graficzny poprawnie rozpoznał szum IID z rozkładu normalnego jako biały szum. Na wykresie \ref{graph1} widać, że żadne wartości nie odstają poza ustalony przedział ufności. Aby mieć pewność, że jest to faktycznie szum IID wykonamy test graficzny 1000 razy na różnych próbach.
+<<testowanie_białoszumowsci3, echo=FALSE>>=
+set.seed(111)
+a <- 0
+for (i in 1:1000) {
+  x <- rnorm(100)
+  a <- a + graph_test2(x)
+}
+cat(paste(c('Odsetek testów wskazujących, że szum IID z rozkładu N(0,1)', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+Test w większości przypadków rozpoznał szum IID ze standardowego rozkładu normalnego jako biały szum. Możemy wykorzystać ten test dla innych szeregów czasowych.
+\begin{enumerate}
+\item \label{1} \textbf{Model ruchomej średniej rzędu 1} \\
+Przypomnijmy, że proces ruchomej średniej jest dany wzorem:
+$$X_t=Z_t+\theta Z_{t-1},$$
+gdzie $Z_t\sim WN(0,~\sigma^2$). W tym modelu przyjmiemy $\theta=0.1$.
+\begin{figure}[H]
+<<testowanie_białoszumowsci4, echo=FALSE>>=
+n <- 100
+theta <- 0.1
+MA1.1 <- arima.sim(n = n, model = list(ma = theta))
+graph_test(MA1.1)
+@
+\caption{Wykres autokorelacji modelu ruchomej średniej rzędu 1}
+\label{graph2}
+\end{figure}
+W tej próbie wyszło nam, że to nie jest biały szum, jednak wynik jednej próby nie ma większego sensu ze względu na losowość. Na \ref{graph2} dokładnie widać, że co najmniej jedna autokorelacja istotnie odstaje poza przedział ufności. Aby dokładniej sprawdzić, czy nasz szereg jest białym szumem powtórzymy nasz test 1000 razy, tak jak w przypadku szumu IID z rozkładu $N(0,1)$.
+<<testowanie_białoszumowsci5, echo=FALSE>>=
+n <- 100
+theta <- 0.1
+a <- 0
+for (i in 1:1000) {
+  x <- arima.sim(n = n, model = list(ma = theta))
+  a <- a + graph_test2(x)
+}
+cat(paste(c('Odsetek testów wskazujących, że model ruchomej średniej rzędu 1', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+
+Widzimy, że w większości przypadków mamy do czynienia z białym szumem, ale potrzebne będą formalne testy, żeby jednoznacznie stwierdzić, czy faktycznie tak jest.
+\item \textbf{Odwzorowanie logistyczne} \\
+Zajmiemy się teraz innym przykładem - równaniem logistycznym. Przypomnijmy, że odwzorowanie logistyczne jest dane wzorem:
+$$f(x)=\lambda x(1-x),~\lambda\in[0;4],~x\in[0;1].$$
+W naszym przypadku niech $\lambda=1.5$.
+\begin{figure}[H]
+<<testowanie_białoszumowsci6, echo=FALSE>>=
+lambda <- 1.5
+n <- 100
+x <- runif(n)
+x <- lambda*x*(1-x)
+graph_test(x)
+@
+\caption{Wykres autokorelacji równania logistycznego}
+\label{graph3}
+\end{figure}
+W pojedynczej próbie wyszło nam, że jest to biały szum. Na \ref{graph3} nie ma żadnych autokorelacji odstających poza ustalony przedział ufności. Dla pewności powtórzymy test 1000 razy tak, jak w przypadku \ref{1}.
+<<testowanie_białoszumowsci7, echo=FALSE>>=
+a <- 0
+for (i in 1:1000) {
+  x <- runif(n)
+  x <- lambda*x*(1-x)
+  a <- a + graph_test2(x)
+}
+cat(paste(c('Odsetek testów wskazujących, że równanie logistyczne', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+W tym wypadku wyszło nam, że trochę większy odsetek prób jest białym szumem niż w przypadku modelu ruchomej średniej rzędu 1. W testach formalnych dokładniej sprawdzimy, czy równanie logistyczne jest faktycznie białym szumem.
+\end{enumerate}
+\subsection{Testy formalne} 
+\def\lf{\left\lfloor}   
+\def\rf{\right\rfloor}
+Zajmiemy się teraz formalnymi testami białoszumowości - testem Boxa-Pierce'a i Ljungi-Boxa. Przypomnijmy, że statystyki testowe dla obu testów prezentują się następująco:\\
+\\
+Dla Boxa-Pierce'a:
+$$Q_{BP}=n\sum_{j=1}^h\hat\rho^2(j),$$
+Dla Ljungi-Boxa:
+$$Q_{LB}=n(n+2)\sum_{j=1}^h\frac{\hat\rho^2(j)}{n-j},$$
+gdzie $h$ oznacza pewne maksymalne opóźnienie, a $\hat\rho(j)$ to próbkowa autokorelacja dla opóźnienia $j$. Przy założeniu, że hipoteza zerowa o białoszumowości jest prawdziwa obie statystyki mają w przybliżeniu rozkład chi-kwadrat z $h$ stopniami swobody. \\
+Najpierw porównamy skuteczność obu testów przy testowaniu szumu IID z rozkładu $N(0,1)$. Z wykładu wiemy, że test Ljungi-Boxa ma lepsze własności teoretyczne, więc przeprowadzimy symulacje, aby sprawdzić, czy faktycznie daje lepsze wyniki. Oba testy są zaimplementowane w R za pomocą funkcji \verb+Box.test+, w której ustawiamy parametr $type$ odpowiednio na \verb+'Box-Pierce'+ lub na \verb+'Ljung-Box'+. Przyjmujemy $h=\lf\frac{n}{4}\rf$.
+<<testowanie_białoszumowsci8, echo=FALSE>>=
+set.seed(1)
+n <- 100
+h.max <- floor(n/4)
+realizacje <- matrix(rnorm(n*1000), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę o białoszumowości,'), paste('a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+Co ciekawe, test Ljungi-Boxa częściej odrzucał białoszumowość szumu IID ze standardowego rozkładu normalnego. Sprawdźmy, czy tak samo będzie dla szumu z rozkładu wykładniczego z parametrem $\lambda=1$.
+<<testowanie_białoszumowsci9, echo=FALSE>>=
+realizacje <- matrix(rexp(n*1000),n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę o białoszumowości,'), paste('a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+W tym wypadku również test Boxa-Pierce'a częściej przyjmował hipotezę o białoszumowości. Może to wynikać z tego, że wartości statystyki testu Ljungi-Boxa są bliższe rzeczywistemu rozkładowi dla skończonych prób, zatem rzadziej będzie fałszywie przyjmował hipotezę zerową niż test Boxa-Pierce'a. Oba testy jednak o wiele częściej w obu przypadkach mówiły nam, że nie mamy podstaw do odrzucenia hipotezy o białoszumowości. \\
+Sprawdzimy za pomocą obu testów, czy szeregi analizowane w \ref{sekcja1} są białymi szumami.
+\begin{enumerate}
+\item \textbf{Model ruchomej średniej rzędu 1 (MA(1))} \label{item1}\\
+Przypomnijmy, że parametr $\theta$ w tym szeregu u nas wynosi 0.1.
+
+<<testowanie_białoszumowsci10, echo=FALSE>>=
+realizacje <- matrix(arima.sim(n = n*1000, model = list(ma = theta)), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę '), paste('o białoszumowości, a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+Widzimy, że w tym wypadku na podstawie obu testów rozpoznajemy MA(1) z parametrem $\theta=0.1$ jako biały szum. Zobaczmy, czy dla innego parametru $\theta$, np. $\theta=0.5$, testy również powiedzą nam, że MA(1) jest białym szumem.
+<<testowanie_białoszumowsci11, echo=FALSE>>=
+theta <- 0.5
+realizacje <- matrix(arima.sim(n = n*1000, model = list(ma = theta)), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę '), paste('o białoszumowości, a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+Na podstawie wyników obu testów widzimy zatem, że dla innego parametru $\theta$ model ruchomej średniej rzędu 1 nie jest białym szumem. Test graficzny w tym przypadku również daje taki rezultat:
+<<tetestowanie_białoszumowsci12, echo=FALSE>>=
+a <- 0
+for (i in 1:1000) {
+  x <- arima.sim(n = n, model = list(ma = theta))
+  a <- a + graph_test2(x)
+}
+cat(paste(c('Odsetek testów wskazujących, że model ruchomej średniej rzędu 1', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+Możemy też zmienić ilość próbek na $n=50$. Wtedy dla testów formalnych:
+\begin{itemize}
+\item $\theta=0.1$
+<<testowanie_białoszumowsci13, echo=FALSE>>=
+theta <- 0.1
+n <- 50
+realizacje <- matrix(arima.sim(n = n*1000, model = list(ma = theta)), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę '), paste('o białoszumowości, a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+Widzimy, że w tym przypadku oba testy zgodnie w większości przypadków uznają szereg MA(1) z $\theta=0.1$ jako biały szum.
+\item $\theta=0.5$
+<<testowanie_białoszumowsci14, echo=FALSE>>=
+theta <- 0.5
+realizacje <- matrix(arima.sim(n = n*1000, model = list(ma = theta)), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę '), paste('o białoszumowości, a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+W tym wypadku oba testy zwracają kompletnie rozbieżne rezultaty, ale oba w większości przypadków nie widzą podstaw do odrzucenia hipotezy o białoszumowści modelu MA(1) z $\theta=0.5$. Oczywiście, nie przyjmujemy tych rezultatów za prawdziwe, gdyż wiemy, że dla większego (czyli "lepszego") $n$ odrzucamy hipotezę o białoszumowości.
+\end{itemize}
+Dla testu graficznego:
+\begin{itemize}
+\item $\theta=0.1$
+<<testowanie_białoszumowsci15, echo=FALSE>>=
+a <- 0
+theta <- 0.1
+for (i in 1:1000) {
+  x <- arima.sim(n = n, model = list(ma = theta))
+  a <- a + graph_test2(x)
+}
+cat(paste(c('Odsetek testów wskazujących, że model ruchomej średniej rzędu 1', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+Tak samo, jak wcześniej test graficzny przyjmuje hipotezę o białoszumowości szeregu MA(1) z $\theta=0.1$.
+\item $\theta=0.5$
+<<testowanie_białoszumowsci16, echo=FALSE>>=
+a <- 0
+theta <- 0.5
+for (i in 1:1000) {
+  x <- arima.sim(n = n, model = list(ma = theta))
+  a <- a + graph_test2(x)
+}
+cat(paste(c('Odsetek testów wskazujących, że model ruchomej średniej rzędu 1', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+Dla $\theta=0.5$ test graficzny odrzuca hipotezę o białoszumowości tak samo, jak wcześniej.
+\end{itemize}
+Biorąc pod uwagę naszą analizę dochodzimy do następujących wniosków:
+\begin{wn}{Model ruchomej średniej rzędu 1 z parametrem $\theta=0.1$ jest białym szumem.} \end{wn}
+\begin{wn}{Model ruchomej średniej rzędu 1 z parametrem $\theta=0.5$ nie jest białym szumem.} \end{wn}
+\item \textbf{Równanie logistyczne}\\
+Przypomnijmy, że parametr $\lambda$ w tym odwzorowaniu u nas wynosi 1.5.
+<<testowanie_białoszumowsci17, echo=FALSE>>=
+n <- 100
+x <- runif(n*1000)
+realizacje <- matrix(lambda*x*(1-x), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę '), paste('o białoszumowości, a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+Widzimy, że oba testy w tym przypadku nie widzą podstaw do odrzucenia hipotezy o białoszumowości. Tak samo jak w \ref{item1}, sprawdzimy inny parametr $\lambda$, np. $\lambda=3.7$, aby zobaczyć, czy również w tym przypadku mamy do czynienia z białym szumem:
+<<testowanie_białoszumowsci18, echo=FALSE>>=
+n <- 100
+lambda <- 3.7
+x <- runif(n*1000)
+realizacje <- matrix(lambda*x*(1-x), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę '), paste('o białoszumowości, a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+W tym przypadku oba testy również jednogłośnie nie miały podstaw do odrzucenia hipotezy o białoszumowości. Test graficzny w tym wypadku również się zgadza z wynikami testów Boxa-Pierce'a i Ljungi-Boxa:
+<<testowanie_białoszumowsci19, echo=FALSE>>=
+a <- 0
+for (i in 1:1000) {
+  x <- runif(n)
+  x <- lambda*x*(1-x)
+  a <- a + graph_test2(x)
+}
+n <- 50
+cat(paste(c('Odsetek testów wskazujących, że równanie logistyczne', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+Możemy zobaczyć, czy dla $n=50$ obie formy testowania również dadzą ten sam rezultat. Dla testów formalnych:
+\begin{itemize}
+\item $\lambda=1.5$
+<<testowanie_białoszumowsci20, echo=FALSE>>=
+lambda <- 1.5
+x <- runif(n*1000)
+realizacje <- matrix(lambda*x*(1-x), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę '), paste('o białoszumowości, a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+Widzimy, że dwukrotne zmniejszenie próby nie zmieniło ostatecznego rezultatu testów. Biorąc pod uwagę same testy formalne, możemy zatem przyjąć, że mamy do czynienia z białym szumem.
+\item $\lambda=3.7$
+<<testowanie_białoszumowsci21, echo=FALSE>>=
+lambda <- 3.7
+x <- runif(n*1000)
+realizacje <- matrix(lambda*x*(1-x), n, 1000)
+wynik.BP <- apply(realizacje, 2, function(x) Box.test(x,type="Box-Pierce", lag=h.max)$p.value>0.05)
+wynik.LB <- apply(realizacje, 2, function(x) Box.test(x,type="Ljung-Box", lag=h.max)$p.value>0.05) 
+cat(paste(c(paste('W', 100*mean(wynik.BP), '% przypadków test Boxa-Pierce\'a przyjął hipotezę '), paste('o białoszumowości, a test Ljungi-Boxa w', 100*mean(wynik.LB), '% przypadków.')), collapse = '\n'))
+@
+Dla $\lambda=3.7$ oba testy także mówią nam, że nie ma podstaw do odrzucenia hipotezy o białoszumowości. Na podstawie testów formalnych stwierdzamy zatem, że mamy do czynienia z białym szumem.
+\end{itemize}
+Dla testu graficznego:
+\begin{itemize}
+\item $\lambda=1.5$
+<<testowanie_białoszumowsci22, echo=FALSE>>=
+lambda <- 1.5
+a <- 0
+for (i in 1:1000) {
+  x <- runif(n)
+  x <- lambda*x*(1-x)
+  a <- a + graph_test2(x)
+}
+cat(paste(c('Odsetek testów wskazujących, że równanie logistyczne', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+Tak samo, jak dla $n=100$ test graficzny wskazuje nam, że równanie logistyczne z $\lambda=1.5$ jest białym szumem.
+\item $\lambda=3.7$
+<<testowanie_białoszumowsci23, echo=FALSE>>=
+lambda <- 3.7
+a <- 0
+for (i in 1:1000) {
+  x <- runif(n)
+  x <- lambda*x*(1-x)
+  a <- a + graph_test2(x)
+}
+n <- 50
+cat(paste(c('Odsetek testów wskazujących, że równanie logistyczne', paste('jest białym szumem:', a/1000)), collapse = '\n'))
+@
+W tym wypadku test graficzny również mówi nam, że rozważany przez nas szereg jest białym szumem.
+\end{itemize}
+Biorąc pod uwagę naszą analizę dochodzimy do następujących wniosków:
+\begin{wn}{Równanie logstyczne z parametrem $\lambda=1.5$ jest białym szumem.} \end{wn}
+\begin{wn}{Równanie logstyczne z parametrem $\lambda=3.7$ jest białym szumem.} \end{wn}
+\end{enumerate}
+
+\end{document}
