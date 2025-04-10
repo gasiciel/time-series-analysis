@@ -60,7 +60,7 @@ Przeprowadzimy symulacyjną analizę własności rozkładów asymptotycznych est
 
 
 \subsection{Estymator wartości oczekiwanej $\mu$}
-Najpierw zbadamy własności rozkładu estymatora wartości oczekiwanej $\mu$ zdefiniowanego w równaniu \eqref{eq:srednia}, czyli średniej próbkowej, dla różnych rozkładów i różnych długości szeregów $n$. Analiza zostanie przeprowadzona dla trzech rozkładów: normalnego, wykładniczego oraz jednostajnego.
+Najpierw zbadamy własności rozkładu estymatora wartości oczekiwanej $\mu$ zdefiniowanego w równości \eqref{eq:srednia}, czyli średniej próbkowej, dla różnych rozkładów i różnych długości szeregów $n$. Analiza zostanie przeprowadzona dla trzech rozkładów: normalnego, wykładniczego oraz jednostajnego.
 
 \newpage
 \subsubsection{Rozkład normalny}
